@@ -1,0 +1,59 @@
+{
+  "description": "POS Printer Application",
+  "author": "CodeDot Solution",
+  "name": "restro-print",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "postinstall": "electron-rebuild"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-network": "^3.0.0-alpha.3",
+    "escpos-usb": "^3.0.0-alpha.3",
+    "express": "^4.21.2",
+    "pusher-js": "^8.4.0",
+    "usb": "^2.15.0"
+  },
+  "build": {
+    "appId": "com.codedotsolution.restroprint",
+    "productName": "RestroPrint",
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.utilities",
+      "icon": "./icon.icns"
+    },
+    "win": {
+      "target": {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      "icon": "./icon.ico"
+    },
+    "nsis": {
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "index.html",
+      "preload.js",
+      "renderer.js",
+      "settings.json",
+      "dist/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  },
+  "devDependencies": {
+    "electron": "^36.1.0",
+    "electron-builder": "^26.0.12"
+  }
+}
