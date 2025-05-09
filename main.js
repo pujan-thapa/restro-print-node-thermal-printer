@@ -34,10 +34,10 @@ ipcMain.handle("list-usb-printers", async () => {
       try {
         device.open(); // Required to access string descriptors
         const descriptor = device.deviceDescriptor;
-        const isPrinter = device.interfaces.some(
-          (iface) => iface.descriptor.bInterfaceClass === 7
-        );
-        if (isPrinter) {
+        // const isPrinter = device.interfaces.some(
+        //   (iface) => [7, 255].includes(iface.descriptor.bInterfaceClass)
+        // );
+        // if (isPrinter) {
           let manufacturer = null;
           let product = null;
           let serialNumber = null;
@@ -68,7 +68,8 @@ ipcMain.handle("list-usb-printers", async () => {
               )
             );
           }
-
+          product = product || `Product 0x${descriptor.idProduct.toString(16)}`;
+          manufacturer = manufacturer || `Vendor 0x${descriptor.idVendor.toString(16)}`;
           printerDevices.push({
             vendorId: descriptor.idVendor,
             productId: descriptor.idProduct,
@@ -76,7 +77,7 @@ ipcMain.handle("list-usb-printers", async () => {
             product,
             serialNumber: serialNumber || null,
           });
-        }
+        // }
         device.close();
       } catch (e) {
         console.warn("Failed to check USB device", e);
