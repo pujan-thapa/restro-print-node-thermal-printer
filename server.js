@@ -111,7 +111,6 @@ function handlePrint({ text, printerType, ip, printerPort, retryCount = 0 }, don
   let device;
   try {
     if (printerType === "usb") {
-      sendLog("USB Print", mainWindow, true);
       try {
         device = new escpos.USB();
         sendLog("Using USB printer: "+ device.deviceDescriptor, mainWindow, true);
@@ -121,7 +120,6 @@ function handlePrint({ text, printerType, ip, printerPort, retryCount = 0 }, don
         return;
       }
     } else if (printerType === "lan") {
-      sendLog("IP Print", mainWindow, true);
       if (!ip || !printerPort) {
         sendLog("❌ Missing IP or port for LAN printer.", mainWindow, true);
         if (done) done(false);
