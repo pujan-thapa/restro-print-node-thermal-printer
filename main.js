@@ -34,6 +34,8 @@ ipcMain.handle("list-usb-printers", async () => {
       try {
         device.open(); // Required to access string descriptors
         const descriptor = device.deviceDescriptor;
+        const unsupportedClasses = [0x01, 0x03, 0x09]; // AUDIO, HID, HUB
+        if (unsupportedClasses.includes(descriptor.bDeviceClass)) continue;
         // const isPrinter = device.interfaces.some(
         //   (iface) => [7, 255].includes(iface.descriptor.bInterfaceClass)
         // );
