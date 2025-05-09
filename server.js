@@ -112,9 +112,7 @@ function handlePrint({ text, printerType, ip, printerPort, retryCount = 0 }, don
   try {
     if (printerType === "usb") {
       try {
-        sendLog("escpos.USB = "+ JSON.stringify(escpos.USB), mainWindow, true);
         device = new escpos.USB();
-        sendLog("Using USB printer: "+ device.deviceDescriptor, mainWindow, true);
       } catch (usbErr) {
         sendLog("❌ USB printing not supported: " + usbErr, mainWindow, true);
         if (done) done(true);

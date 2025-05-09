@@ -6,8 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "postinstall": "patch-package"
+    "build": "electron-builder"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -18,7 +17,15 @@
     "pusher-js": "^8.4.0",
     "usb": "^2.15.0"
   },
+  "devDependencies": {
+    "electron": "^36.1.0",
+    "electron-builder": "^26.0.12",
+    "patch-package": "^8.0.0"
+  },
   "build": {
+    "asar": {
+      "smartUnpack": true
+    },
     "appId": "com.codedotsolution.restroprint",
     "productName": "RestroPrint",
     "mac": {
@@ -51,11 +58,5 @@
     "directories": {
       "output": "dist"
     }
-  },
-  "devDependencies": {
-    "electron": "^36.1.0",
-    "electron-builder": "^26.0.12",
-    "patch-package": "^8.0.0",
-    "postinstall-postinstall": "^2.1.0"
   }
 }
