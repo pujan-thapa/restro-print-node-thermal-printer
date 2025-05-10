@@ -1,12 +1,10 @@
 const fs = require("fs");
 const path = require("path");
-const escpos = require("escpos");
+const ThermalPrinter = require("node-thermal-printer").printer;
+const PrinterTypes = require("node-thermal-printer").types;
 const Pusher = require("pusher-js/node");
 const os = require("os");
 
-// Load printer connection modules
-escpos.Network = require("escpos-network");
-escpos.USB = require('escpos-usb');
 // Load settings
 let defaultSettings = {
   printerType: "lan",
@@ -40,7 +38,6 @@ let sendLog = (message, mainWindow, isUIMessage = null) => {
     console.error("Failed to write log:", err);
   }
 
-  // Automatically determine if message should be shown in UI
   if (isUIMessage === null) {
     const importantPhrases = [
       "✅",
@@ -64,7 +61,7 @@ let sendLog = (message, mainWindow, isUIMessage = null) => {
 
 // Log print action
 function logPrint(content, mainWindow) {
-  sendLog(`🖨️ Printed:\n${content}`, mainWindow, true); // Send only to UI if needed
+  sendLog(`🖨️ Printed:\n${content}`, mainWindow, true);
 }
 
 const printQueue = [];
@@ -86,17 +83,25 @@ function processPrintQueue(mainWindow) {
     (shouldRetry = false) => {
       isPrinting = false;
       if (shouldRetry && nextJob.retryCount < 3) {
-        sendLog(`🔁 Retrying job (${nextJob.retryCount + 1}/3)...`, mainWindow, true);
-        enqueuePrint(nextJob, mainWindow, nextJob.retryCount + 1); // Add job back to the queue for retry
+        sendLog(
+          `🔁 Retrying job (${nextJob.retryCount + 1}/3)...`,
+          mainWindow,
+          true
+        );
+        enqueuePrint(nextJob, mainWindow, nextJob.retryCount + 1);
       }
 
-      processPrintQueue(mainWindow);  // Immediately process next job even if the current one is being retried
+      processPrintQueue(mainWindow);
     },
     mainWindow
   );
 }
 
-function handlePrint({ text, printerType, ip, printerPort, retryCount = 0 }, done, mainWindow) {
+async function handlePrint(
+  { text, printerType, ip, printerPort, retryCount = 0 },
+  done,
+  mainWindow
+) {
   printerType = printerType || defaultSettings.printerType;
   ip = ip || defaultSettings.ip;
   printerPort = printerPort || defaultSettings.printerPort;
@@ -108,76 +113,49 @@ function handlePrint({ text, printerType, ip, printerPort, retryCount = 0 }, don
   }
   sendLog("🧾 Printing content:\n" + text, mainWindow, true);
 
-  let device;
+  let printer;
+
   try {
-    if (printerType === "usb") {
-      try {
-        device = new escpos.USB();
-      } catch (usbErr) {
-        sendLog("❌ USB printing not supported: " + JSON.stringify(usbErr), mainWindow, true);
-        if (done) done(true);
-        return;
-      }
-    } else if (printerType === "lan") {
+    if (printerType === "lan") {
       if (!ip || !printerPort) {
         sendLog("❌ Missing IP or port for LAN printer.", mainWindow, true);
         if (done) done(false);
         return;
       }
-      device = new escpos.Network(ip, printerPort);
+
+      // Correct initialization for network printer in v4.4.5
+      printer = new ThermalPrinter({
+        type: PrinterTypes.EPSON,
+        interface: `tcp://${ip}:${printerPort}`,
+      });
     } else {
       sendLog("❌ Unsupported printer type.", mainWindow, true);
       if (done) done(false);
       return;
     }
 
-    const printer = new escpos.Printer(device);
-
-    // Wrap device.open with a timeout of 5 seconds
-    const openWithTimeout = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("Printer connection timed out."));
-      }, 5000);
-
-      device.open((err) => {
-        clearTimeout(timeout);
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
-    });
-
-    openWithTimeout
-      .then(() => {
-        try {
-          printer
-            .text(text)
-            .cut()
-            .close(() => {
-              sendLog("✅ Printed successfully.", mainWindow, true);
-              if (done) done(false);
-            });
-        } catch (printErr) {
-          sendLog("🛑 Printing failed: " + JSON.stringify(printErr), mainWindow, true);
-          try {
-            if (device && typeof device.close === "function") {
-              device.close();
-            }
-          } catch (closeErr) {
-            sendLog("Error closing device: " + JSON.stringify(closeErr), mainWindow, true);
-          }
-          if (done) done(true);
-        }
-      })
-      .catch((err) => {
-        sendLog("Printer connection failed: " + JSON.stringify(err), mainWindow, true);
-        if (done) done(true);
-      });
+    // Print the document
+    try {
+      printer.println(text);
+      printer.cut();
+      await printer.execute();
+      sendLog("✅ Printed successfully.", mainWindow, true);
+      if (done) done(false); // Success
+    } catch (err) {
+      sendLog(
+        `🛑 Printing failed: ${err.message}\nStack trace: ${err.stack}`,
+        mainWindow,
+        true
+      );
+      if (done) done(true); // Failed
+    }
   } catch (err) {
-    sendLog("Unexpected error: " + JSON.stringify(err), mainWindow, true);
-    if (done) done(true);
+    sendLog(
+      `Unexpected error: ${err.message}\nStack trace: ${err.stack}`,
+      mainWindow,
+      true
+    );
+    if (done) done(true); // Failed
   }
 }
 
@@ -186,8 +164,9 @@ function startServer(mainWindow) {
   console.log("Starting server...");
   mainWindow.webContents.send(
     "update-log",
-    "[Init] Ready to receive print jobs." // Initial log sent to UI
+    "[Init] Ready to receive print jobs."
   );
+
   // Setup Pusher inside startServer so it can use mainWindow
   const pusher = new Pusher("727d4c5680711508ffaa", {
     cluster: "ap2",
@@ -197,7 +176,7 @@ function startServer(mainWindow) {
   const channel = pusher.subscribe("printer");
 
   channel.bind("App\\Events\\PrinterEvent", (data) => {
-    sendLog("📨 Print request received.", mainWindow, true); // Send only necessary info
+    sendLog("📨 Print request received.", mainWindow, true);
     enqueuePrint(data, mainWindow);
   });
 
@@ -210,7 +189,11 @@ function startServer(mainWindow) {
   });
 
   pusher.connection.bind("error", (err) => {
-    sendLog("❗ Websocket connection error: " + JSON.stringify(err), mainWindow, true);
+    sendLog(
+      "❗ Websocket connection error: " + JSON.stringify(err),
+      mainWindow,
+      true
+    );
   });
 
   // Error handlers
@@ -222,10 +205,6 @@ function startServer(mainWindow) {
     sendLog("Unhandled Rejection: " + JSON.stringify(reason), mainWindow, true);
   });
 
-  // Example periodic log
-  setInterval(() => {
-    sendLog("📢 Server is running...", mainWindow, false); // Send periodic log to console, not UI
-  }, 10000);
 }
 
 module.exports.start = startServer;
