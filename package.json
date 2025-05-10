@@ -14,12 +14,14 @@
     "escpos-network": "^3.0.0-alpha.3",
     "escpos-usb": "^3.0.0-alpha.3",
     "express": "^4.21.2",
+    "prod": "^1.0.1",
     "pusher-js": "^8.4.0",
     "usb": "^2.15.0"
   },
   "devDependencies": {
-    "electron": "^36.1.0",
+    "electron": "^36.2.0",
     "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
     "patch-package": "^8.0.0"
   },
   "build": {

@@ -114,7 +114,7 @@ function handlePrint({ text, printerType, ip, printerPort, retryCount = 0 }, don
       try {
         device = new escpos.USB();
       } catch (usbErr) {
-        sendLog("❌ USB printing not supported: " + usbErr, mainWindow, true);
+        sendLog("❌ USB printing not supported: " + JSON.stringify(usbErr), mainWindow, true);
         if (done) done(true);
         return;
       }
@@ -160,23 +160,23 @@ function handlePrint({ text, printerType, ip, printerPort, retryCount = 0 }, don
               if (done) done(false);
             });
         } catch (printErr) {
-          sendLog("🛑 Printing failed: " + printErr, mainWindow, true);
+          sendLog("🛑 Printing failed: " + JSON.stringify(printErr), mainWindow, true);
           try {
             if (device && typeof device.close === "function") {
               device.close();
             }
           } catch (closeErr) {
-            sendLog("Error closing device: " + closeErr, mainWindow, true);
+            sendLog("Error closing device: " + JSON.stringify(closeErr), mainWindow, true);
           }
           if (done) done(true);
         }
       })
       .catch((err) => {
-        sendLog("Printer connection failed: " + err, mainWindow, true);
+        sendLog("Printer connection failed: " + JSON.stringify(err), mainWindow, true);
         if (done) done(true);
       });
   } catch (err) {
-    sendLog("Unexpected error: " + err, mainWindow, true);
+    sendLog("Unexpected error: " + JSON.stringify(err), mainWindow, true);
     if (done) done(true);
   }
 }
@@ -210,16 +210,16 @@ function startServer(mainWindow) {
   });
 
   pusher.connection.bind("error", (err) => {
-    sendLog("❗ Websocket connection error: " + err, mainWindow, true);
+    sendLog("❗ Websocket connection error: " + JSON.stringify(err), mainWindow, true);
   });
 
   // Error handlers
   process.on("uncaughtException", (err) => {
-    sendLog("Uncaught Exception: " + err, mainWindow, true);
+    sendLog("Uncaught Exception: " + JSON.stringify(err), mainWindow, true);
   });
 
   process.on("unhandledRejection", (reason) => {
-    sendLog("Unhandled Rejection: " + reason, mainWindow, true);
+    sendLog("Unhandled Rejection: " + JSON.stringify(reason), mainWindow, true);
   });
 
   // Example periodic log
