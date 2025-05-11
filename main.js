@@ -1,8 +1,70 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
+const WinReg = require("winreg");
 const server = require("./server.js");
 
 let mainWindow = null;
+
+// Get registry value for appKey or cluster
+async function getRegistryValue(name) {
+  return new Promise((resolve) => {
+    const regKey = new WinReg({
+      hive: WinReg.HKCU,
+      key: "\\Software\\RestroPrintElectron",
+    });
+
+    regKey.get(name, (err, item) => {
+      if (err) {
+        console.error(`Error reading registry for ${name}:`, err.message);
+      }
+      resolve(err || !item ? null : item.value);
+    });
+  });
+}
+
+// Set registry value for appKey or cluster
+function setRegistryValue(name, value) {
+  const regKey = new WinReg({
+    hive: WinReg.HKCU,
+    key: "\\Software\\RestroPrintElectron",
+  });
+
+  regKey.set(name, WinReg.REG_SZ, value, (err) => {
+    if (err) {
+      console.error(`Failed to set ${name}:`, err.message);
+    }
+  });
+}
+let pendingConfigResolve = null;
+
+// Handle config submission from renderer
+ipcMain.on("submit-config", (event, data) => {
+  const { appKey, cluster } = data;
+
+  setRegistryValue("appKey", appKey);
+  setRegistryValue("cluster", cluster);
+
+  if (pendingConfigResolve) {
+    pendingConfigResolve({ appKey, cluster });
+    pendingConfigResolve = null;
+  }
+});
+// Check for configuration in the registry
+async function checkOrRequestConfig() {
+  let appKey = await getRegistryValue("appKey");
+  let cluster = await getRegistryValue("cluster");
+
+  // If no appKey or cluster, show modal to ask for values
+  if (!appKey || !cluster) {
+    mainWindow.webContents.send("request-config");
+    return new Promise((resolve) => {
+      pendingConfigResolve = resolve;
+    });
+  }
+
+  // Return values if found in the registry
+  return { appKey, cluster };
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -18,92 +80,26 @@ function createWindow() {
 
   mainWindow.loadFile("index.html");
 
-  // Handle manual log requests
   ipcMain.on("print-log", (event, log) => {
     mainWindow.webContents.send("update-log", log);
   });
 }
-const usb = require("usb");
 
-ipcMain.handle("list-usb-printers", async () => {
-  try {
-    const devices = usb.getDeviceList();
-    const printerDevices = [];
-
-    for (const device of devices) {
-      try {
-        device.open(); // Required to access string descriptors
-        const descriptor = device.deviceDescriptor;
-        const unsupportedClasses = [0x01, 0x03, 0x09]; // AUDIO, HID, HUB
-        if (unsupportedClasses.includes(descriptor.bDeviceClass)) continue;
-        // const isPrinter = device.interfaces.some(
-        //   (iface) => [7, 255].includes(iface.descriptor.bInterfaceClass)
-        // );
-        // if (isPrinter) {
-          let manufacturer = null;
-          let product = null;
-          let serialNumber = null;
-
-          // Fetch strings if available
-          if (descriptor.iManufacturer) {
-            manufacturer = await new Promise((resolve) =>
-              device.getStringDescriptor(
-                descriptor.iManufacturer,
-                (err, data) => resolve(err ? null : data)
-              )
-            );
-          }
-
-          if (descriptor.iProduct) {
-            product = await new Promise((resolve) =>
-              device.getStringDescriptor(descriptor.iProduct, (err, data) =>
-                resolve(err ? null : data)
-              )
-            );
-          }
-
-          if (descriptor.iSerialNumber) {
-            serialNumber = await new Promise((resolve) =>
-              device.getStringDescriptor(
-                descriptor.iSerialNumber,
-                (err, data) => resolve(err ? null : data)
-              )
-            );
-          }
-          product = product || `Product 0x${descriptor.idProduct.toString(16)}`;
-          manufacturer = manufacturer || `Vendor 0x${descriptor.idVendor.toString(16)}`;
-          printerDevices.push({
-            vendorId: descriptor.idVendor,
-            productId: descriptor.idProduct,
-            manufacturer,
-            product,
-            serialNumber: serialNumber || null,
-          });
-        // }
-        device.close();
-      } catch (e) {
-        console.warn("Failed to check USB device", e);
-      }
-    }
-
-    return printerDevices;
-  } catch (err) {
-    console.error("Failed to list USB printers", err);
-    return [];
-  }
-});
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
-  server.start(mainWindow);
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+
+  mainWindow.webContents.once("did-finish-load", async () => {
+    const config = await checkOrRequestConfig();
+    if (config.appKey && config.cluster) {
+      server.start(mainWindow, config.appKey, config.cluster);
     }
+  });
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  if (process.platform !== "darwin") app.quit();
 });

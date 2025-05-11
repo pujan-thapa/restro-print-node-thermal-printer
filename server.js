@@ -28,7 +28,7 @@ let sendLog = (message, mainWindow, isUIMessage = null) => {
   const entry = `[${formattedDate}] ${message}\n`;
 
   try {
-    const logDir = path.join(os.homedir(), "Documents", "POS Printer Logs");
+    const logDir = path.join(os.homedir(), "Documents", "RestroPrint Logs");
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true });
     }
@@ -143,7 +143,7 @@ async function handlePrint(
       if (done) done(false); // Success
     } catch (err) {
       sendLog(
-        `🛑 Printing failed: ${err.message}\nStack trace: ${err.stack}`,
+        `🛑 Printing failed: ${err.message}`,
         mainWindow,
         true
       );
@@ -151,7 +151,7 @@ async function handlePrint(
     }
   } catch (err) {
     sendLog(
-      `Unexpected error: ${err.message}\nStack trace: ${err.stack}`,
+      `Unexpected error: ${err.message}`,
       mainWindow,
       true
     );
@@ -160,16 +160,15 @@ async function handlePrint(
 }
 
 // Start server with mainWindow
-function startServer(mainWindow) {
-  console.log("Starting server...");
+function startServer(mainWindow,appkey,cluster) {
   mainWindow.webContents.send(
     "update-log",
     "[Init] Ready to receive print jobs."
   );
 
   // Setup Pusher inside startServer so it can use mainWindow
-  const pusher = new Pusher("727d4c5680711508ffaa", {
-    cluster: "ap2",
+  const pusher = new Pusher(appkey, {
+    cluster: cluster,
     encrypted: true,
   });
 
