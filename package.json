@@ -9,7 +9,7 @@
     "build": "electron-builder"
   },
   "dependencies": {
-    "electron-store": "^10.0.1",
+    "electron-store": "^8.1.0",
     "node-thermal-printer": "^4.4.5",
     "pusher-js": "^8.4.0",
     "usb": "^2.15.0"
