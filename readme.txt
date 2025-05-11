@@ -1,1 +1,0 @@
-Install zadig.exe and convert usb to winusb for windows.
