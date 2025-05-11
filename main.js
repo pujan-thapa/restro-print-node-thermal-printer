@@ -1,39 +1,18 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
-const WinReg = require("winreg");
 const server = require("./server.js");
-
+const ElectronStore = require('electron-store');
+const Store = ElectronStore.default || ElectronStore; // <-- safe fallback for both CJS and ESM
+const store = new Store({ encryptionKey: '1qwd#$%sadwq12fdfe' });
 let mainWindow = null;
-
-// Get registry value for appKey or cluster
+// Get config value for appKey or cluster
 async function getRegistryValue(name) {
-  return new Promise((resolve) => {
-    const regKey = new WinReg({
-      hive: WinReg.HKCU,
-      key: "\\Software\\RestroPrintElectron",
-    });
-
-    regKey.get(name, (err, item) => {
-      if (err) {
-        console.error(`Error reading registry for ${name}:`, err.message);
-      }
-      resolve(err || !item ? null : item.value);
-    });
-  });
+  return store.get(name);
 }
 
-// Set registry value for appKey or cluster
+// Set config value for appKey or cluster
 function setRegistryValue(name, value) {
-  const regKey = new WinReg({
-    hive: WinReg.HKCU,
-    key: "\\Software\\RestroPrintElectron",
-  });
-
-  regKey.set(name, WinReg.REG_SZ, value, (err) => {
-    if (err) {
-      console.error(`Failed to set ${name}:`, err.message);
-    }
-  });
+  store.set(name, value);
 }
 let pendingConfigResolve = null;
 
@@ -51,21 +30,22 @@ ipcMain.on("submit-config", (event, data) => {
 });
 // Check for configuration in the registry
 async function checkOrRequestConfig() {
-  let appKey = await getRegistryValue("appKey");
-  let cluster = await getRegistryValue("cluster");
+  const appKey = await getRegistryValue("appKey");
+  const cluster = await getRegistryValue("cluster");
 
-  // If no appKey or cluster, show modal to ask for values
-  if (!appKey || !cluster) {
-    mainWindow.webContents.send("request-config");
-    return new Promise((resolve) => {
-      pendingConfigResolve = resolve;
-    });
+  if (appKey && cluster) {
+    return { appKey, cluster };
   }
 
-  // Return values if found in the registry
-  return { appKey, cluster };
+  return new Promise((resolve) => {
+    pendingConfigResolve = resolve;
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send("request-config");
+    } else {
+      resolve({ appKey: null, cluster: null }); // Fallback if window is not ready
+    }
+  });
 }
-
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 800,
@@ -80,26 +60,28 @@ function createWindow() {
 
   mainWindow.loadFile("index.html");
 
+  // Handle manual log requests
   ipcMain.on("print-log", (event, log) => {
     mainWindow.webContents.send("update-log", log);
   });
 }
-
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   createWindow();
-
   mainWindow.webContents.once("did-finish-load", async () => {
     const config = await checkOrRequestConfig();
     if (config.appKey && config.cluster) {
       server.start(mainWindow, config.appKey, config.cluster);
     }
   });
-
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
   });
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
 });
